@@ -1,0 +1,33 @@
+{
+  "title": "FPR2 Virtual Screening Benchmark: Agentic AI Skill-Guided vs Naive Protocols",
+  "description": "Reproducible benchmark comparing naive default protocols against Claude Code AI skill-guided protocols for structure-based virtual screening of FPR2 (formyl peptide receptor 2). Includes 18 Python/Bash scripts (~3100 LOC), curated active/decoy libraries, pre-computed docking scores, evaluation metrics, and a compiled manuscript. Docking performed with Uni-Dock (GPU-accelerated AutoDock Vina) on ~5000 compounds.",
+  "creators": [
+    {
+      "name": "Gani, Osman A.B.S.M.",
+      "affiliation": "University of Oslo",
+      "orcid": ""
+    }
+  ],
+  "upload_type": "software",
+  "license": "MIT",
+  "keywords": [
+    "virtual screening",
+    "agentic AI",
+    "FPR2",
+    "Uni-Dock",
+    "Claude Code",
+    "AutoDock Vina",
+    "drug discovery",
+    "molecular docking",
+    "benchmark"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.1021/acs.jcim.2c01145",
+      "relation": "references",
+      "scheme": "doi",
+      "resource_type": "publication-article"
+    }
+  ],
+  "access_right": "open"
+}
