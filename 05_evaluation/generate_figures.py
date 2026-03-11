@@ -215,57 +215,71 @@ def make_fig_main(data, metrics):
     ax_a.set_ylim(-0.02, 1.02)
     label_panel(ax_a, "A")
 
-    # ── Panel B: Enrichment bar chart ────────────────────────
+    # ── Panel B: Bootstrap ROC AUC distributions ──────────────
     ax_b = fig.add_subplot(gs[1])
-    metric_names = ["bedroc_20", "ef_1pct", "ef_5pct"]
-    display_names = ["BEDROC\n(\u03b1=20)", "EF 1%", "EF 5%"]
 
-    x = np.arange(len(metric_names))
-    width = 0.32
-    offsets = {"naive": -width / 2, "skill": width / 2}
-
+    rng = np.random.default_rng(42)
+    n_boot = 2000
+    auc_boots = {}
     for protocol, d in data.items():
+        n = len(d["y_true"])
+        aucs = []
+        for _ in range(n_boot):
+            idx = rng.integers(0, n, n)
+            yt, ys = d["y_true"][idx], d["y_score"][idx]
+            if yt.sum() == 0 or yt.sum() == n:
+                continue
+            fpr_b, tpr_b, _ = roc_curve(yt, ys)
+            aucs.append(sklearn_auc(fpr_b, tpr_b))
+        auc_boots[protocol] = np.array(aucs)
+
+    # Paired violin plots
+    positions = [0, 1]
+    parts = ax_b.violinplot([auc_boots["naive"], auc_boots["skill"]],
+                             positions=positions, showmedians=False,
+                             showextrema=False, widths=0.65)
+    for pc, protocol in zip(parts["bodies"], ["naive", "skill"]):
+        pc.set_facecolor(PALETTE[protocol])
+        pc.set_alpha(0.5)
+        pc.set_edgecolor(PALETTE[protocol])
+        pc.set_linewidth(0.6)
+
+    # Overlay box plots for quartiles
+    bp = ax_b.boxplot([auc_boots["naive"], auc_boots["skill"]],
+                       positions=positions, widths=0.18,
+                       patch_artist=True, showfliers=False,
+                       medianprops=dict(color="white", linewidth=1.2),
+                       whiskerprops=dict(color="#333333", linewidth=0.6),
+                       capprops=dict(color="#333333", linewidth=0.6),
+                       boxprops=dict(linewidth=0.5))
+    for patch, protocol in zip(bp["boxes"], ["naive", "skill"]):
+        patch.set_facecolor(PALETTE[protocol])
+        patch.set_alpha(0.85)
+
+    # Point estimates
+    for i, protocol in enumerate(["naive", "skill"]):
         m = metrics.get(protocol, {})
-        vals = [m.get(mn, 0) for mn in metric_names]
-        ci_data = m.get("bootstrap_ci", {})
-        err_minus, err_plus = [], []
-        for mn, v in zip(metric_names, vals):
-            ci = ci_data.get(mn, {})
-            lo = ci.get("ci_low", v)
-            hi = ci.get("ci_high", v)
-            # Handle NaN CIs (skill EF1%)
-            if np.isnan(lo) or np.isnan(hi):
-                err_minus.append(0)
-                err_plus.append(0)
-            else:
-                err_minus.append(max(0, v - lo))
-                err_plus.append(max(0, hi - v))
+        observed = m.get("roc_auc", np.median(auc_boots[protocol]))
+        ax_b.plot(i, observed, "D", color="white", markersize=4,
+                  markeredgecolor="#333333", markeredgewidth=0.6, zorder=5)
 
-        short = "Naive" if protocol == "naive" else "Skill"
-        ax_b.bar(x + offsets[protocol], vals, width,
-                 color=PALETTE[protocol], alpha=0.85, label=short,
-                 edgecolor="white", linewidth=0.3)
-        ax_b.errorbar(x + offsets[protocol], vals,
-                      yerr=[err_minus, err_plus],
-                      fmt="none", color="#333333", capsize=2.5,
-                      linewidth=0.6, capthick=0.6)
+    # DeLong p-value bracket
+    stats = json.load(open(RESULTS_DIR / "comparison_stats.json"))
+    delong_p = stats.get("delong_auc", {}).get("p_value", 0)
+    delta = stats.get("delong_auc", {}).get("delta_auc", 0)
+    y_bracket = max(auc_boots["naive"].max(), auc_boots["skill"].max()) + 0.008
+    ax_b.plot([0, 0, 1, 1], [y_bracket - 0.004, y_bracket, y_bracket, y_bracket - 0.004],
+              color="#333333", lw=0.7)
+    p_text = f"$\\Delta$AUC = +{delta:.3f}\nDeLong $p$ = {delong_p:.3f}"
+    ax_b.text(0.5, y_bracket + 0.003, p_text, ha="center", va="bottom",
+              fontsize=6, color="#333333")
 
-    ax_b.axhline(y=1.0, color=PALETTE["grey"], linestyle=":", lw=0.6)
-    ax_b.text(2.55, 1.05, "random", color=PALETTE["grey"], fontsize=5,
-              va="bottom", ha="right")
-    ax_b.set_xticks(x)
-    ax_b.set_xticklabels(display_names, ha="center")
-    ax_b.set_ylabel("Metric Value")
-    # Cap y-axis: show bars clearly without CI domination
-    all_bar_vals = []
-    for p in ["naive", "skill"]:
-        for mn in metric_names:
-            all_bar_vals.append(metrics.get(p, {}).get(mn, 0))
-    ymax_b = max(all_bar_vals) * 1.45
-    ax_b.set_ylim(0, ymax_b)
-    ax_b.set_clip_on(True)
-    ax_b.legend(fontsize=6, handlelength=1.0, loc="upper left",
-                borderpad=0.3, labelspacing=0.2)
+    ax_b.set_xticks(positions)
+    ax_b.set_xticklabels(["Naive", "Skill"], fontsize=7)
+    ax_b.set_ylabel("ROC AUC (bootstrap)")
+    ax_b.axhline(0.5, color=PALETTE["grey"], linestyle=":", lw=0.5)
+    ax_b.text(1.05, 0.502, "random", color=PALETTE["grey"], fontsize=5,
+              va="bottom", ha="left")
     label_panel(ax_b, "B")
 
     # ── Panel C: Box plots of docking scores ─────────────────
