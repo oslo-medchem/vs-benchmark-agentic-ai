@@ -180,90 +180,104 @@ def save_figure(fig, stem):
 # Main figure: 3-panel composite
 # ──────────────────────────────────────────
 def make_fig_main(data, metrics):
-    fig = plt.figure(figsize=(7.09, 2.4))  # 180 mm wide (full Nature page)
-    gs = gridspec.GridSpec(1, 3, figure=fig, wspace=0.42, left=0.06, right=0.98)
+    from scipy.stats import mannwhitneyu
+
+    fig = plt.figure(figsize=(7.09, 3.0))  # 180 mm × 76 mm (Nature full width)
+    gs = gridspec.GridSpec(1, 3, figure=fig, wspace=0.45,
+                           left=0.065, right=0.98, bottom=0.15, top=0.90,
+                           width_ratios=[1.15, 1.0, 1.0])
 
     # ── Panel A: ROC curves ──────────────────────────────────
     ax_a = fig.add_subplot(gs[0])
-    ax_a.plot([0, 1], [0, 1], "--", color=PALETTE["grey"], lw=0.7, label="Random")
+    ax_a.plot([0, 1], [0, 1], "--", color=PALETTE["grey"], lw=0.6, zorder=1)
 
     for protocol, d in data.items():
         fpr, tpr, _ = roc_curve(d["y_true"], d["y_score"])
         roc_auc = sklearn_auc(fpr, tpr)
         m = metrics.get(protocol, {})
         ci = m.get("bootstrap_ci", {}).get("roc_auc", {})
-        ci_lo = ci.get("ci_low", roc_auc - 0.01)
-        ci_hi = ci.get("ci_high", roc_auc + 0.01)
-        label = f"{PROTOCOL_LABELS[protocol]}\nAUC = {roc_auc:.3f} [{ci_lo:.3f}–{ci_hi:.3f}]"
-        ax_a.plot(fpr, tpr, color=PALETTE[protocol], lw=1.2, label=label)
+        ci_lo = ci.get("ci_low", roc_auc)
+        ci_hi = ci.get("ci_high", roc_auc)
+        short = "Naive" if protocol == "naive" else "Skill"
+        label = f"{short} (AUC = {roc_auc:.3f} [{ci_lo:.2f}\u2013{ci_hi:.2f}])"
+        ax_a.plot(fpr, tpr, color=PALETTE[protocol], lw=1.2, label=label, zorder=3)
 
-        # Bootstrap CI band (fast)
-        fpr_g, tpr_lo, tpr_hi = bootstrap_roc_band(d["y_true"], d["y_score"], n_boot=200)
-        ax_a.fill_between(fpr_g, tpr_lo, tpr_hi, color=PALETTE[f"{protocol}_ci"], alpha=0.3)
+        # Bootstrap CI band — subtle fill
+        fpr_g, tpr_lo, tpr_hi = bootstrap_roc_band(d["y_true"], d["y_score"], n_boot=300)
+        ax_a.fill_between(fpr_g, tpr_lo, tpr_hi, color=PALETTE[protocol],
+                          alpha=0.12, linewidth=0, zorder=2)
 
     ax_a.set_xlabel("False Positive Rate")
     ax_a.set_ylabel("True Positive Rate")
-    ax_a.set_title("ROC Curves")
-    ax_a.legend(loc="lower right", fontsize=6, handlelength=1.5)
+    ax_a.legend(loc="lower right", fontsize=6, handlelength=1.2,
+                borderpad=0.4, labelspacing=0.3, handletextpad=0.5)
     ax_a.set_xlim(-0.02, 1.02)
     ax_a.set_ylim(-0.02, 1.02)
-
-    # Inset: early enrichment (FPR 0–0.05)
-    ax_ins = ax_a.inset_axes([0.45, 0.08, 0.50, 0.45])
-    ax_ins.plot([0, 0.05], [0, 0.05], "--", color=PALETTE["grey"], lw=0.5)
-    for protocol, d in data.items():
-        fpr, tpr, _ = roc_curve(d["y_true"], d["y_score"])
-        ax_ins.plot(fpr, tpr, color=PALETTE[protocol], lw=0.8)
-    ax_ins.set_xlim(-0.002, 0.051)
-    ax_ins.set_ylim(-0.01, ax_ins.get_ylim()[1] * 1.1 if ax_ins.get_ylim()[1] > 0 else 0.5)
-    ax_ins.set_xlabel("FPR", fontsize=5)
-    ax_ins.set_ylabel("TPR", fontsize=5)
-    ax_ins.tick_params(labelsize=5)
-    ax_ins.set_title("Early enrichment", fontsize=5)
     label_panel(ax_a, "A")
 
-    # ── Panel B: BEDROC + EF bar chart ───────────────────────
+    # ── Panel B: Enrichment bar chart ────────────────────────
     ax_b = fig.add_subplot(gs[1])
     metric_names = ["bedroc_20", "ef_1pct", "ef_5pct"]
-    display_names = ["BEDROC\n(α=20)", "EF\n(1%)", "EF\n(5%)"]
-    random_ref = {"bedroc_20": 0.0, "ef_1pct": 1.0, "ef_5pct": 1.0}
+    display_names = ["BEDROC\n(\u03b1=20)", "EF 1%", "EF 5%"]
 
     x = np.arange(len(metric_names))
-    width = 0.35
-
-    for i, (protocol, d) in enumerate(data.items()):
-        m = metrics.get(protocol, {})
-        vals = [m.get(mn, 0) for mn in metric_names]
-        errs_lo = [m.get("bootstrap_ci", {}).get(mn, {}).get("ci_low", v) for mn, v in zip(metric_names, vals)]
-        errs_hi = [m.get("bootstrap_ci", {}).get(mn, {}).get("ci_high", v) for mn, v in zip(metric_names, vals)]
-        err_minus = [max(0, v - e) for v, e in zip(vals, errs_lo)]
-        err_plus = [max(0, e - v) for v, e in zip(vals, errs_hi)]
-        bars = ax_b.bar(x + i * width, vals, width,
-                        color=PALETTE[protocol], alpha=0.85,
-                        label=PROTOCOL_LABELS[protocol])
-        ax_b.errorbar(x + i * width, vals,
-                      yerr=[err_minus, err_plus],
-                      fmt="none", color="k", capsize=2, linewidth=0.5)
-
-    # Random reference lines
-    ax_b.axhline(y=1.0, color=PALETTE["grey"], linestyle=":", lw=0.7, label="Random EF")
-    ax_b.set_xticks(x + width / 2)
-    ax_b.set_xticklabels(display_names, ha="center")
-    ax_b.set_ylabel("Value")
-    ax_b.set_title("Enrichment Metrics")
-    ax_b.legend(fontsize=6, handlelength=1.2)
-    label_panel(ax_b, "B")
-
-    # ── Panel C: Violin plots of docking scores ───────────────
-    ax_c = fig.add_subplot(gs[2])
-
-    violin_data = []
-    violin_pos = []
-    violin_colors = []
-    tick_labels = []
-    pos = 0
+    width = 0.32
+    offsets = {"naive": -width / 2, "skill": width / 2}
 
     for protocol, d in data.items():
+        m = metrics.get(protocol, {})
+        vals = [m.get(mn, 0) for mn in metric_names]
+        ci_data = m.get("bootstrap_ci", {})
+        err_minus, err_plus = [], []
+        for mn, v in zip(metric_names, vals):
+            ci = ci_data.get(mn, {})
+            lo = ci.get("ci_low", v)
+            hi = ci.get("ci_high", v)
+            # Handle NaN CIs (skill EF1%)
+            if np.isnan(lo) or np.isnan(hi):
+                err_minus.append(0)
+                err_plus.append(0)
+            else:
+                err_minus.append(max(0, v - lo))
+                err_plus.append(max(0, hi - v))
+
+        short = "Naive" if protocol == "naive" else "Skill"
+        ax_b.bar(x + offsets[protocol], vals, width,
+                 color=PALETTE[protocol], alpha=0.85, label=short,
+                 edgecolor="white", linewidth=0.3)
+        ax_b.errorbar(x + offsets[protocol], vals,
+                      yerr=[err_minus, err_plus],
+                      fmt="none", color="#333333", capsize=2.5,
+                      linewidth=0.6, capthick=0.6)
+
+    ax_b.axhline(y=1.0, color=PALETTE["grey"], linestyle=":", lw=0.6)
+    ax_b.text(2.55, 1.05, "random", color=PALETTE["grey"], fontsize=5,
+              va="bottom", ha="right")
+    ax_b.set_xticks(x)
+    ax_b.set_xticklabels(display_names, ha="center")
+    ax_b.set_ylabel("Metric Value")
+    # Cap y-axis: show bars clearly without CI domination
+    all_bar_vals = []
+    for p in ["naive", "skill"]:
+        for mn in metric_names:
+            all_bar_vals.append(metrics.get(p, {}).get(mn, 0))
+    ymax_b = max(all_bar_vals) * 1.45
+    ax_b.set_ylim(0, ymax_b)
+    ax_b.set_clip_on(True)
+    ax_b.legend(fontsize=6, handlelength=1.0, loc="upper left",
+                borderpad=0.3, labelspacing=0.2)
+    label_panel(ax_b, "B")
+
+    # ── Panel C: Box plots of docking scores ─────────────────
+    ax_c = fig.add_subplot(gs[2])
+
+    box_data = []
+    box_colors = []
+    box_labels = []
+    mw_results = []
+
+    for protocol in ["naive", "skill"]:
+        d = data[protocol]
         mask_a = d["y_true"] == 1
         mask_d = d["y_true"] == 0
         scores_a = d["y_score_raw"][mask_a]
@@ -271,43 +285,59 @@ def make_fig_main(data, metrics):
         # Remove unscored (score==0)
         scores_a = scores_a[scores_a != 0]
         scores_d = scores_d[scores_d != 0]
+        short = "Naive" if protocol == "naive" else "Skill"
 
-        if len(scores_a) > 0:
-            violin_data.append(scores_a)
-            violin_pos.append(pos)
-            violin_colors.append(PALETTE[protocol])
-            tick_labels.append(f"{PROTOCOL_LABELS[protocol][:12]}\nActives")
-            pos += 1
-        if len(scores_d) > 0:
-            violin_data.append(scores_d)
-            violin_pos.append(pos)
-            violin_colors.append(PALETTE[protocol] + "88")
-            tick_labels.append(f"{PROTOCOL_LABELS[protocol][:12]}\nDecoys")
-            pos += 1
+        box_data.append(scores_a)
+        box_colors.append(PALETTE[protocol])
+        box_labels.append(f"{short}\nActives")
+
+        box_data.append(scores_d)
+        box_colors.append(PALETTE[protocol] + "66")
+        box_labels.append(f"{short}\nDecoys")
+
         if len(scores_a) > 0 and len(scores_d) > 0:
-            # Mann-Whitney annotation
-            from scipy.stats import mannwhitneyu
-            stat, pval = mannwhitneyu(scores_a, scores_d, alternative="less")
-            p_text = "***" if pval < 0.001 else ("**" if pval < 0.01 else ("*" if pval < 0.05 else "ns"))
+            _, pval = mannwhitneyu(scores_a, scores_d, alternative="less")
+            mw_results.append((len(box_data) - 2, len(box_data) - 1, pval))
 
-    if violin_data:
-        parts = ax_c.violinplot(violin_data, positions=violin_pos,
-                                showmedians=True, showextrema=False,
-                                widths=0.6)
-        for i, (pc, color) in enumerate(zip(parts["bodies"], violin_colors)):
-            pc.set_facecolor(color)
-            pc.set_alpha(0.7)
-        parts["cmedians"].set_color("black")
-        parts["cmedians"].set_linewidth(1.0)
+    positions = np.array([0, 0.7, 1.8, 2.5])
+    bp = ax_c.boxplot(box_data, positions=positions, widths=0.5,
+                      patch_artist=True, showfliers=False,
+                      medianprops=dict(color="black", linewidth=1.0),
+                      whiskerprops=dict(linewidth=0.6),
+                      capprops=dict(linewidth=0.6),
+                      boxprops=dict(linewidth=0.5))
 
-    ax_c.set_xticks(violin_pos)
-    ax_c.set_xticklabels(tick_labels, fontsize=5.5)
+    for patch, color in zip(bp["boxes"], box_colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.75)
+
+    # Significance brackets
+    for (i, j, pval) in mw_results:
+        p_text = "***" if pval < 0.001 else ("**" if pval < 0.01 else ("*" if pval < 0.05 else "ns"))
+        x1, x2 = positions[i], positions[j]
+        # Get max whisker height for this pair
+        all_scores = np.concatenate([box_data[i], box_data[j]])
+        q1, q3 = np.percentile(all_scores, [25, 75])
+        iqr = q3 - q1
+        whisker_top = min(all_scores[all_scores <= q3 + 1.5 * iqr].max(),
+                          all_scores.max()) if len(all_scores) > 0 else 0
+        y = whisker_top - 0.3
+        ax_c.plot([x1, x1, x2, x2], [y - 0.15, y, y, y - 0.15],
+                  color="#333333", lw=0.6)
+        ax_c.text((x1 + x2) / 2, y + 0.05, p_text, ha="center", va="bottom",
+                  fontsize=6, color="#333333")
+
+    ax_c.set_xticks(positions)
+    ax_c.set_xticklabels(box_labels, fontsize=6)
     ax_c.set_ylabel("Docking Score (kcal/mol)")
-    ax_c.set_title("Score Distributions")
+
+    # Sensible y-axis from IQR (exclude extreme outliers)
+    all_nonzero = np.concatenate([s for s in box_data if len(s) > 0])
+    q1_all, q3_all = np.percentile(all_nonzero, [5, 95])
+    margin = (q3_all - q1_all) * 0.3
+    ax_c.set_ylim(q1_all - margin, q3_all + margin)
     label_panel(ax_c, "C")
 
-    fig.suptitle("Skill-guided vs. Naive Virtual Screening: FPR2 Benchmark",
-                 fontsize=9, y=1.01, x=0.52)
     save_figure(fig, "fig_main")
     plt.close(fig)
 
