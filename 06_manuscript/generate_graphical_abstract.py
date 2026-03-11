@@ -1,256 +1,200 @@
 #!/usr/bin/env python3
-"""Generate graphical abstract for Bioinformatics Application Note.
+"""Generate compact, high-quality graphical abstract.
 
-Layout (3 columns, left to right):
-  1. AI Agent + Skill File
-  2. Autonomous Pipeline (4 stages)
-  3. Results: ROC curves + ΔAUC callout
+Single-canvas landscape, tight Nature-quality layout:
+  Left: Agent + Skill | Centre: Pipeline | Right: ΔAUC banner + ROC plot
 
-Outputs: graphical_abstract.{png,eps,pdf,svg}
+Outputs: graphical_abstract.{png,eps,pdf,svg} at 600 DPI
 """
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
-from matplotlib.gridspec import GridSpec
+from matplotlib.patches import FancyBboxPatch, Rectangle
 import numpy as np
 import json
 from pathlib import Path
 
-# ── Paths ────────────────────────────────────────────────────
 EVAL_DIR = Path(__file__).resolve().parent.parent / "05_evaluation"
 OUT_DIR = Path(__file__).resolve().parent / "figures"
 OUT_DIR.mkdir(exist_ok=True)
 
-# ── Colours ──────────────────────────────────────────────────
-C_AGENT = "#3B82F6"       # blue
-C_SKILL = "#8B5CF6"       # purple
-C_PIPE = "#0EA5E9"        # sky blue
-C_NAIVE = "#64748B"       # slate
-C_SKILLR = "#EF4444"      # red
-C_BG = "#F8FAFC"          # background
-C_ACCENT = "#10B981"      # emerald
-C_TEXT = "#1E293B"         # dark text
-C_MUTED = "#94A3B8"       # muted text
+# Palette
+C_BLUE   = "#2563EB"
+C_PURPLE = "#7C3AED"
+C_SKY    = "#0EA5E9"
+C_SKY_D  = "#0369A1"
+C_GREEN  = "#059669"
+C_RED    = "#DC2626"
+C_SLATE  = "#64748B"
+C_TEXT   = "#0F172A"
+C_MUTED  = "#94A3B8"
+C_BORDER = "#CBD5E1"
 
 
-def rbox(ax, x, y, w, h, color, text, fs=8, fw="bold", tc="white",
-         ec="none", lw=0, rad=0.03, zorder=2):
-    """Rounded box with centred text."""
-    box = FancyBboxPatch((x, y), w, h,
-                         boxstyle=f"round,pad=0,rounding_size={rad}",
-                         facecolor=color, edgecolor=ec, linewidth=lw,
-                         zorder=zorder)
-    ax.add_patch(box)
-    ax.text(x + w / 2, y + h / 2, text, ha="center", va="center",
-            fontsize=fs, fontweight=fw, color=tc, zorder=zorder + 1)
-
-
-def draw_arrow(ax, x1, y1, x2, y2, color=C_MUTED, lw=1.5):
-    """Simple arrow."""
-    ax.annotate("", xy=(x2, y2), xytext=(x1, y1),
-                arrowprops=dict(arrowstyle="-|>", color=color, lw=lw),
-                zorder=3)
+def pill(ax, x, y, w, h, fc, text="", fs=7.5, fw="bold", tc="white",
+         ec="none", lw=0, rad=0.012):
+    p = FancyBboxPatch((x, y), w, h,
+                       boxstyle=f"round,pad=0,rounding_size={rad}",
+                       fc=fc, ec=ec, lw=lw, zorder=2)
+    ax.add_patch(p)
+    if text:
+        ax.text(x + w / 2, y + h / 2, text, ha="center", va="center",
+                fontsize=fs, fontweight=fw, color=tc, zorder=3,
+                linespacing=1.1)
 
 
 def make_graphical_abstract():
-    """Create the graphical abstract."""
-
-    roc_naive = json.loads((EVAL_DIR / "results" / "roc_naive.json").read_text())
-    roc_skill = json.loads((EVAL_DIR / "results" / "roc_skill.json").read_text())
+    roc_n = json.loads((EVAL_DIR / "results" / "roc_naive.json").read_text())
+    roc_s = json.loads((EVAL_DIR / "results" / "roc_skill.json").read_text())
 
     plt.rcParams.update({
         "font.family": "sans-serif",
-        "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
-        "font.size": 9,
+        "font.sans-serif": ["Arial", "Helvetica Neue", "DejaVu Sans"],
+        "font.size": 8,
     })
 
-    # Use GridSpec for clean 3-column layout
-    fig = plt.figure(figsize=(11, 4.0), dpi=300, facecolor="white")
-    gs = GridSpec(1, 3, figure=fig, width_ratios=[1.0, 1.0, 1.3],
-                  left=0.02, right=0.98, bottom=0.12, top=0.88,
-                  wspace=0.08)
+    fig, ax = plt.subplots(figsize=(9.5, 4.2), dpi=300, facecolor="white")
+    ax.set_xlim(0, 9.5)
+    ax.set_ylim(0, 4.2)
+    ax.set_aspect("equal")
+    ax.axis("off")
 
-    # ── Column 1: Agent + Skill ──────────────────────────────
-    ax1 = fig.add_subplot(gs[0, 0])
-    ax1.set_xlim(0, 4)
-    ax1.set_ylim(0, 5)
-    ax1.set_aspect("equal")
-    ax1.axis("off")
+    # ── Title ────────────────────────────────────────────────
+    ax.text(4.75, 4.02,
+            "Agentic AI with Structured Skill Files for Virtual Screening",
+            ha="center", va="center", fontsize=12, fontweight="bold",
+            color=C_TEXT)
+    ax.text(4.75, 3.78,
+            "FPR2 · PDB 7T6S · Claude Code Opus 4.6 · "
+            "18 scripts · ~3,100 LOC · zero human editing",
+            ha="center", va="center", fontsize=6, color=C_MUTED)
+    ax.plot([0.2, 9.3], [3.65, 3.65], color=C_BORDER, lw=0.7, zorder=1)
 
-    # Background card
-    rbox(ax1, 0.1, 0.1, 3.8, 4.8, C_BG, "", ec="#E2E8F0", lw=1, rad=0.12, zorder=0)
+    # ════════════════════════════════════════════════════════════
+    # LEFT: Agent + Skill (x: 0.15–2.30)
+    # ════════════════════════════════════════════════════════════
+    lx, lw_ = 0.15, 2.00
 
-    # Section label
-    ax1.text(2.0, 4.55, "Input", ha="center", va="center",
-             fontsize=8, fontweight="bold", color=C_MUTED, zorder=5)
+    pill(ax, lx, 2.15, lw_, 0.80, C_BLUE,
+         "Claude Code\n(LLM Agent)", fs=9.5, ec="#1D4ED8", lw=1.2, rad=0.06)
 
-    # Agent box
-    rbox(ax1, 0.4, 2.8, 3.2, 1.2, C_AGENT, "Claude Code\n(LLM Agent)",
-         fs=10, fw="bold", ec="#2563EB", lw=1.5, rad=0.08)
+    ax.text(lx + lw_ / 2, 1.85, "+", ha="center", va="center",
+            fontsize=15, fontweight="bold", color=C_TEXT, zorder=5)
 
-    # "+" symbol
-    ax1.text(2.0, 2.35, "+", ha="center", va="center", fontsize=18,
-             fontweight="bold", color=C_TEXT, zorder=5)
+    pill(ax, lx, 0.85, lw_, 0.80, C_PURPLE,
+         "Skill File\n(212 lines)", fs=9.5, ec="#6D28D9", lw=1.2, rad=0.06)
 
-    # Skill file box
-    rbox(ax1, 0.4, 1.0, 3.2, 1.2, C_SKILL, "Skill File\n(212 lines)",
-         fs=10, fw="bold", ec="#7C3AED", lw=1.5, rad=0.08)
+    ax.text(lx + lw_ / 2, 0.58, "Domain knowledge injection",
+            ha="center", va="center", fontsize=6.5, color=C_MUTED,
+            fontstyle="italic")
 
-    # Label
-    ax1.text(2.0, 0.45, "Domain Knowledge Injection",
-             ha="center", va="center", fontsize=7, color=C_MUTED,
-             fontstyle="italic", fontweight="bold", zorder=5)
+    # Arrow left → centre
+    ax.annotate("", xy=(2.55, 1.85), xytext=(2.28, 1.85),
+                arrowprops=dict(arrowstyle="-|>", color=C_BLUE,
+                                lw=2.2, mutation_scale=14), zorder=5)
 
-    # ── Column 2: Pipeline stages ────────────────────────────
-    ax2 = fig.add_subplot(gs[0, 1])
-    ax2.set_xlim(0, 4)
-    ax2.set_ylim(0, 5)
-    ax2.set_aspect("equal")
-    ax2.axis("off")
-
-    # Background card
-    rbox(ax2, 0.1, 0.1, 3.8, 4.8, C_BG, "", ec="#E2E8F0", lw=1, rad=0.12, zorder=0)
-
-    # Section label
-    ax2.text(2.0, 4.55, "Autonomous Pipeline", ha="center", va="center",
-             fontsize=8, fontweight="bold", color=C_PIPE, zorder=5)
-    ax2.text(2.0, 4.20, "18 scripts  |  ~3,100 lines  |  zero human editing",
-             ha="center", va="center", fontsize=5.5, color=C_MUTED, zorder=5)
-
+    # ════════════════════════════════════════════════════════════
+    # CENTRE: Pipeline (x: 2.60–5.55)
+    # ════════════════════════════════════════════════════════════
     stages = [
-        "ChEMBL\nData Retrieval",
-        "Active Curation &\nDecoy Generation",
-        "PAINS / Brenk\nFiltering",
-        "GPU Docking\n(Uni-Dock)",
+        ("ChEMBL Query",  "100 actives"),
+        ("Decoy Gen.",    "4,780 matched"),
+        ("PAINS/Brenk",   "762 removed"),
+        ("GPU Docking",   "2× RTX 4500"),
     ]
 
-    box_w = 3.0
-    box_h = 0.68
-    box_x = 0.5
-    y_top = 3.40
-    y_gap = 0.20  # gap between boxes
+    px, pw_, ph = 2.65, 2.70, 0.52
+    gap = 0.13
+    y0 = 3.00
 
-    for i, label in enumerate(stages):
-        y = y_top - i * (box_h + y_gap)
-        rbox(ax2, box_x, y, box_w, box_h, C_PIPE, label,
-             fs=8, fw="bold", ec="#0284C7", lw=1, rad=0.06)
-        # Down arrow
+    ax.text(px + pw_ / 2, 3.45, "Autonomous Pipeline",
+            ha="center", va="center", fontsize=7.5, fontweight="bold",
+            color=C_SKY_D)
+
+    for i, (label, note) in enumerate(stages):
+        y = y0 - i * (ph + gap)
+        pill(ax, px, y, pw_, ph, C_SKY, "", ec=C_SKY_D, lw=0.8, rad=0.04)
+        ax.text(px + 0.15, y + ph / 2, label, ha="left", va="center",
+                fontsize=8.5, fontweight="bold", color="white", zorder=3)
+        ax.text(px + pw_ - 0.15, y + ph / 2, note, ha="right", va="center",
+                fontsize=6.5, color="#E0F2FE", zorder=3)
         if i < len(stages) - 1:
-            ay1 = y
-            ay2 = y - y_gap
-            draw_arrow(ax2, box_x + box_w / 2, ay1, box_x + box_w / 2, ay2,
-                       color=C_MUTED, lw=1.5)
+            ax.annotate("", xy=(px + pw_ / 2, y - 0.01),
+                        xytext=(px + pw_ / 2, y + 0.01),
+                        arrowprops=dict(arrowstyle="-|>", color=C_BORDER,
+                                        lw=1.2, mutation_scale=10), zorder=2)
 
-    # GPU note
-    ax2.text(box_x + box_w + 0.05, y_top - 3 * (box_h + y_gap) + box_h / 2,
-             "2× RTX\n4500 Ada", ha="left", va="center", fontsize=6,
-             color=C_MUTED, fontweight="bold", zorder=5)
+    # Arrow centre → right
+    ax.annotate("", xy=(5.75, 1.85), xytext=(5.48, 1.85),
+                arrowprops=dict(arrowstyle="-|>", color=C_SKY,
+                                lw=2.2, mutation_scale=14), zorder=5)
 
-    # ── Column 3: Results ────────────────────────────────────
-    ax3 = fig.add_subplot(gs[0, 2])
-    ax3.set_xlim(0, 5.2)
-    ax3.set_ylim(0, 5)
-    ax3.set_aspect("equal")
-    ax3.axis("off")
+    # ════════════════════════════════════════════════════════════
+    # RIGHT: ΔAUC callout (top) + ROC (bottom)  x: 5.80–9.30
+    # ════════════════════════════════════════════════════════════
 
-    # Background card
-    rbox(ax3, 0.1, 0.1, 5.0, 4.8, C_BG, "", ec="#E2E8F0", lw=1, rad=0.12, zorder=0)
+    # ── ΔAUC callout banner ──────────────────────────────────
+    bx, bw, bh = 5.90, 3.25, 1.10
+    by = 2.45
+    pill(ax, bx, by, bw, bh, "#F0FDF4", "",
+         ec=C_GREEN, lw=2, rad=0.08)
 
-    # Section label
-    ax3.text(2.6, 4.55, "Results", ha="center", va="center",
-             fontsize=8, fontweight="bold", color=C_ACCENT, zorder=5)
+    bcx = bx + bw / 2
+    ax.text(bcx - 0.70, by + bh / 2, "+0.048",
+            ha="center", va="center", fontsize=22, fontweight="bold",
+            color=C_GREEN, zorder=5)
 
-    # ROC curves as inset axes within ax3
-    # Get ax3 position in figure coords
-    pos3 = ax3.get_position()
-    roc_left = pos3.x0 + 0.02
-    roc_bottom = pos3.y0 + 0.08
-    roc_w = pos3.width * 0.55
-    roc_h = pos3.height * 0.72
+    ax.text(bcx + 0.65, by + bh * 0.70, "ROC AUC",
+            ha="center", va="center", fontsize=8, fontweight="bold",
+            color=C_TEXT, zorder=5)
+    ax.text(bcx + 0.65, by + bh * 0.45, "0.658 → 0.710",
+            ha="center", va="center", fontsize=7.5, fontweight="bold",
+            color=C_SLATE, zorder=5)
+    ax.text(bcx + 0.65, by + bh * 0.20, "DeLong p = 0.004",
+            ha="center", va="center", fontsize=6.5, color=C_SLATE,
+            zorder=5)
 
-    ax_roc = fig.add_axes([roc_left, roc_bottom, roc_w, roc_h])
+    # ── ROC plot ─────────────────────────────────────────────
+    pos = ax.get_position()
+    roc_l = pos.x0 + pos.width * 0.63
+    roc_b = pos.y0 + pos.height * 0.16
+    roc_w = pos.width * 0.32
+    roc_h = pos.height * 0.40
 
-    fpr_n = np.array(roc_naive["fpr"])
-    tpr_n = np.array(roc_naive["tpr"])
-    fpr_s = np.array(roc_skill["fpr"])
-    tpr_s = np.array(roc_skill["tpr"])
+    ax_roc = fig.add_axes([roc_l, roc_b, roc_w, roc_h])
 
-    ax_roc.plot([0, 1], [0, 1], "--", color="#CBD5E1", lw=0.8, zorder=1)
-    ax_roc.fill_between(fpr_n, tpr_n, alpha=0.08, color=C_NAIVE, zorder=2)
-    ax_roc.plot(fpr_n, tpr_n, color=C_NAIVE, lw=2.0,
-                label="Naive (AUC = 0.658)", zorder=3)
-    ax_roc.fill_between(fpr_s, tpr_s, alpha=0.10, color=C_SKILLR, zorder=2)
-    ax_roc.plot(fpr_s, tpr_s, color=C_SKILLR, lw=2.0,
-                label="Skill (AUC = 0.710)", zorder=3)
+    fpr_n, tpr_n = np.array(roc_n["fpr"]), np.array(roc_n["tpr"])
+    fpr_s, tpr_s = np.array(roc_s["fpr"]), np.array(roc_s["tpr"])
 
-    ax_roc.set_xlabel("False Positive Rate", fontsize=7, labelpad=2)
-    ax_roc.set_ylabel("True Positive Rate", fontsize=7, labelpad=2)
-    ax_roc.set_xlim(0, 1)
-    ax_roc.set_ylim(0, 1)
-    ax_roc.tick_params(labelsize=6, length=2, pad=1)
-    ax_roc.legend(fontsize=6.5, loc="lower right", frameon=True,
-                  fancybox=True, framealpha=0.95, edgecolor="#E2E8F0")
-    for spine in ax_roc.spines.values():
-        spine.set_color("#CBD5E1")
-        spine.set_linewidth(0.8)
+    ax_roc.plot([0, 1], [0, 1], "--", color="#E2E8F0", lw=0.5, zorder=1)
+    ax_roc.fill_between(fpr_n, tpr_n, alpha=0.05, color=C_SLATE)
+    ax_roc.plot(fpr_n, tpr_n, color=C_SLATE, lw=1.5,
+                label="Naive (0.658)", zorder=3)
+    ax_roc.fill_between(fpr_s, tpr_s, alpha=0.07, color=C_RED)
+    ax_roc.plot(fpr_s, tpr_s, color=C_RED, lw=1.5,
+                label="Skill (0.710)", zorder=3)
 
-    # ΔAUC callout — right of ROC, inside the results card
-    cx = 4.25
-    rbox(ax3, 3.35, 0.8, 1.75, 3.0, "white", "",
-         ec=C_ACCENT, lw=2, rad=0.1, zorder=4)
+    ax_roc.set_xlim(0, 1); ax_roc.set_ylim(0, 1)
+    ax_roc.set_xlabel("FPR", fontsize=6, labelpad=1)
+    ax_roc.set_ylabel("TPR", fontsize=6, labelpad=1)
+    ax_roc.tick_params(labelsize=5, length=1.5, pad=1)
+    ax_roc.legend(fontsize=5.5, loc="lower right", frameon=True,
+                  framealpha=0.95, edgecolor=C_BORDER, handlelength=1,
+                  borderpad=0.3, handletextpad=0.3)
+    for sp in ax_roc.spines.values():
+        sp.set_color(C_BORDER); sp.set_linewidth(0.5)
 
-    ax3.text(cx, 3.45, "ROC AUC", ha="center", va="center",
-             fontsize=8.5, fontweight="bold", color=C_TEXT, zorder=5)
-
-    ax3.text(cx, 2.65, "+0.048", ha="center", va="center",
-             fontsize=17, fontweight="bold", color=C_ACCENT, zorder=5)
-
-    ax3.text(cx, 2.05, "0.658 → 0.710", ha="center", va="center",
-             fontsize=7, fontweight="bold", color=C_MUTED, zorder=5)
-
-    ax3.text(cx, 1.40, "DeLong\np = 0.004", ha="center", va="center",
-             fontsize=7, fontweight="bold", color=C_TEXT, zorder=5)
-
-    # ── Title banner ─────────────────────────────────────────
-    fig.text(0.50, 0.95,
-             "Agentic AI with Structured Skill Files for Virtual Screening",
-             ha="center", va="center", fontsize=12, fontweight="bold",
-             color=C_TEXT)
-
-    # ── Bottom takeaway bar ──────────────────────────────────
-    # Use figure-level rectangle
-    from matplotlib.patches import Rectangle
-    bar = Rectangle((0.02, 0.01), 0.96, 0.055, transform=fig.transFigure,
-                    facecolor=C_TEXT, edgecolor="none", alpha=0.9,
-                    zorder=10, clip_on=False)
+    # ── Footer ───────────────────────────────────────────────
+    bar = Rectangle((0.02, 0.005), 0.96, 0.06, transform=fig.transFigure,
+                    fc=C_TEXT, ec="none", alpha=0.92, zorder=10,
+                    clip_on=False)
     fig.patches.append(bar)
     fig.text(0.50, 0.035,
-             "Lightweight skill files democratise rigorous large-scale virtual screening",
+             "Lightweight skill files democratise rigorous "
+             "large-scale virtual screening",
              ha="center", va="center", fontsize=8.5, fontweight="bold",
              color="white", zorder=11)
-
-    # ── Connecting arrows between columns ────────────────────
-    # Use figure-level annotation for cross-axes arrows
-    # Arrow from col1 to col2
-    fig.patches.append(
-        FancyArrowPatch(
-            (0.345, 0.50), (0.365, 0.50),
-            transform=fig.transFigure,
-            arrowstyle="-|>", color=C_AGENT, lw=2.5,
-            mutation_scale=15, zorder=10, clip_on=False
-        )
-    )
-    # Arrow from col2 to col3
-    fig.patches.append(
-        FancyArrowPatch(
-            (0.665, 0.50), (0.685, 0.50),
-            transform=fig.transFigure,
-            arrowstyle="-|>", color=C_PIPE, lw=2.5,
-            mutation_scale=15, zorder=10, clip_on=False
-        )
-    )
 
     return fig
 
@@ -263,10 +207,9 @@ if __name__ == "__main__":
     for fmt in ("png", "eps", "pdf", "svg"):
         out = OUT_DIR / f"{stem}.{fmt}"
         dpi = 600 if fmt == "png" else None
-        fig.savefig(out, dpi=dpi, bbox_inches="tight", pad_inches=0.05)
+        fig.savefig(out, dpi=dpi, bbox_inches="tight", pad_inches=0.03)
     plt.close(fig)
 
-    # Also copy to evaluation figures
     eval_fig_dir = EVAL_DIR / "figures"
     eval_fig_dir.mkdir(exist_ok=True)
     import shutil
