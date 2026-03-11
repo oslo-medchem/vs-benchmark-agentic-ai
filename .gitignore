@@ -33,7 +33,28 @@ __pycache__/
 # Planning document (internal)
 VS_Benchmark_v2_Plan.docx
 
+# Internal Claude Code guidance
+CLAUDE.md
+
+# Internal manuscript tooling
+update_manuscript_values.py
+
+# Temporary receptor files (re-downloadable from PDB)
+00_setup/tmp_receptor/
+
+# Binary arrays (regenerable from score CSVs)
+05_evaluation/results/*.npy
+
+# Old figure versions (superseded by fig_main/figS*)
+05_evaluation/figures/fig[0-9]_*.pdf
+
+# Submission-only figures (infographic, graphical abstract)
+05_evaluation/figures/infographic.*
+05_evaluation/figures/graphical_abstract.*
+
 # OS
 .DS_Store
 Thumbs.db
+
+# Manuscript (kept locally only)
 06_manuscript/
