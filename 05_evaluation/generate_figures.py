@@ -168,12 +168,13 @@ MS_FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def save_figure(fig, stem):
-    """Save as PDF, SVG, and high-resolution PNG (600 DPI)."""
+    """Save as PDF, SVG, EPS, and high-resolution PNG (600 DPI)."""
     for d in (FIG_DIR, MS_FIG_DIR):
         fig.savefig(d / f"{stem}.pdf")
         fig.savefig(d / f"{stem}.svg")
+        fig.savefig(d / f"{stem}.eps")
         fig.savefig(d / f"{stem}.png", dpi=600)
-    print(f"  Saved: {stem}.pdf + .svg + .png (600 DPI) → figures/ + 06_manuscript/figures/")
+    print(f"  Saved: {stem}.pdf + .svg + .eps + .png (600 DPI) → figures/ + 06_manuscript/figures/")
 
 
 # ──────────────────────────────────────────
