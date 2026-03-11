@@ -163,13 +163,17 @@ def label_panel(ax, letter, x=-0.12, y=1.06):
             fontsize=10, fontweight="bold", va="top", ha="left")
 
 
+MS_FIG_DIR = VS_DIR / "06_manuscript" / "figures"
+MS_FIG_DIR.mkdir(parents=True, exist_ok=True)
+
+
 def save_figure(fig, stem):
-    """Save as PDF and SVG."""
-    pdf_path = FIG_DIR / f"{stem}.pdf"
-    svg_path = FIG_DIR / f"{stem}.svg"
-    fig.savefig(pdf_path)
-    fig.savefig(svg_path)
-    print(f"  Saved: {pdf_path.name} + {svg_path.name}")
+    """Save as PDF, SVG, and high-resolution PNG (600 DPI)."""
+    for d in (FIG_DIR, MS_FIG_DIR):
+        fig.savefig(d / f"{stem}.pdf")
+        fig.savefig(d / f"{stem}.svg")
+        fig.savefig(d / f"{stem}.png", dpi=600)
+    print(f"  Saved: {stem}.pdf + .svg + .png (600 DPI) → figures/ + 06_manuscript/figures/")
 
 
 # ──────────────────────────────────────────
